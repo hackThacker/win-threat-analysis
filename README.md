@@ -1,6 +1,43 @@
-# Malware Incident Analysis Report
+<div align="center">
 
-## Case Overview
+# 🛡️ Malware Incident Analysis Report
+### XMRig Cryptocurrency Miner — Forensic Investigation
+
+![Threat Type](https://img.shields.io/badge/Threat-Cryptojacker-red?style=flat-square)
+![Severity](https://img.shields.io/badge/Severity-HIGH-critical?style=flat-square)
+![Status](https://img.shields.io/badge/Status%20at%20Discovery-ACTIVE-red?style=flat-square)
+![AV Detection](https://img.shields.io/badge/Host%20AV-UNDETECTED-orange?style=flat-square)
+![VirusTotal](https://img.shields.io/badge/VirusTotal-Confirmed-blue?style=flat-square&logo=virustotal)
+![Type](https://img.shields.io/badge/Analysis-Incident%20Response-purple?style=flat-square)
+
+</div>
+
+---
+
+## 📋 Table of Contents
+
+- [Case Overview](#-case-overview)
+- [How It Was Discovered](#-how-it-was-discovered)
+  - [Investigation Tools Used](#investigation-tools-used)
+  - [Investigation Timeline](#investigation-timeline)
+- [Threat Summary](#-threat-summary)
+- [File-by-File Analysis](#-file-by-file-analysis)
+- [Indicators of Compromise (IOCs)](#-indicators-of-compromise-iocs)
+  - [File System IOCs](#file-system-iocs)
+  - [Network IOCs](#network-iocs)
+  - [Attacker Wallet](#attackers-monero-wallet-address)
+  - [Persistence IOCs](#persistence-iocs)
+- [MITRE ATT&CK Mapping](#-mitre-attck-framework-mapping)
+- [Why the Host AV Failed](#-why-the-host-antivirus-failed-to-detect-this)
+- [Impact Assessment](#-impact-assessment)
+- [Remediation Steps](#-remediation-steps)
+- [Sample Preservation](#-sample-preservation--windowshostzip)
+- [Key Learning Points](#-key-learning-points)
+- [Conclusion](#-conclusion)
+
+---
+
+## 📁 Case Overview
 
 | Field | Details |
 |-------|---------|
@@ -10,15 +47,15 @@
 | **Threat Type** | Cryptocurrency Miner (Cryptojacker) |
 | **Malware Family** | XMRig |
 | **Cryptocurrency Targeted** | Monero (XMR) |
-| **Severity** | HIGH |
-| **Status at Discovery** | ACTIVE |
+| **Severity** | `HIGH` |
+| **Status at Discovery** | `ACTIVE` |
 | **Location** | `C:\Users\niraj\AppData\Roaming\windowshost\` |
-| **Antivirus Detection (host AV)** | UNDETECTED — evaded the installed antivirus on the victim machine |
+| **Antivirus Detection (host AV)** | ⚠️ UNDETECTED — evaded the installed antivirus on the victim machine |
 | **VirusTotal Reference** | [5379df3d28d8…1bc49bc3](https://www.virustotal.com/gui/file/5379df3d28d83164b24cfa02833233514958652eca489b968ff6e36b1bc49bc3) |
 
 ---
 
-## How It Was Discovered
+## 🔍 How It Was Discovered
 
 The malware was **not detected by the antivirus running on the host**. It was discovered through manual investigation after observing suspicious system behavior:
 
@@ -39,92 +76,106 @@ The malware was **not detected by the antivirus running on the host**. It was di
 
 ### Investigation Timeline
 
-1. **Symptom observed** — Laptop boots with ~80% CPU usage, no user apps open.
-2. **Task Manager** — Suspicious `svchost32.exe` visible in Details tab.
+**Step 1 — Symptom Observed**
+Laptop boots with ~80% CPU usage, no user apps open.
 
-   ![Task Manager Details tab listing svchost32.exe](images/01-task-manager-svchost32-process.png)
-   *Behaviour: shows the renamed miner running alongside legitimate `svchost.exe` instances.*
-   *Use case: first visual confirmation that an unknown process is masquerading as a system process.*
+**Step 2 — Task Manager**
+Suspicious `svchost32.exe` visible in the Details tab.
 
-3. **Process Explorer** — Inspected the process to see private bytes / working set and threads.
+![Task Manager Details tab listing svchost32.exe](images/01-task-manager-svchost32-process.png)
+> **Behaviour:** Shows the renamed miner running alongside legitimate `svchost.exe` instances.  
+> **Use case:** First visual confirmation that an unknown process is masquerading as a system process.
 
-   ![Process Explorer properties for svchost32.exe](images/12-process-explorer-threads.png)
-   *Behaviour: `svchost32.exe` (PID 35592) holds ~2.45 GB working set with heavy CPU cycles.*
-   *Use case: quantifies the resource theft caused by the miner.*
+**Step 3 — Process Explorer**
+Inspected the process to see private bytes, working set, and threads.
 
-4. **Located the malware folder** — Drilled into `AppData\Roaming\windowshost\`.
+![Process Explorer properties for svchost32.exe](images/12-process-explorer-threads.png)
+> **Behaviour:** `svchost32.exe` (PID 35592) holds ~2.45 GB working set with heavy CPU cycles.  
+> **Use case:** Quantifies the resource theft caused by the miner.
 
-   ![windowshost folder contents](images/04-windowshost-folder-listing.png)
-   *Behaviour: 7 files staged in user AppData — exe, vbs, config, lock, certs, hash list.*
-   *Use case: enumerates every artifact dropped by the attacker.*
+**Step 4 — Located the Malware Folder**
+Drilled into `AppData\Roaming\windowshost\`.
 
-5. **Inspected `runhidden.vbs`** — The hidden launcher used at logon.
+![windowshost folder contents](images/04-windowshost-folder-listing.png)
+> **Behaviour:** 7 files staged in user AppData — exe, vbs, config, lock, certs, hash list.  
+> **Use case:** Enumerates every artifact dropped by the attacker.
 
-   ![runhidden.vbs source code](images/02-runhidden-vbs-launcher.png)
-   *Behaviour: launches `svchost32.exe` with window style `0` (hidden) using `WScript.Shell.Run`.*
-   *Use case: explains how the miner runs with no visible window or console.*
+**Step 5 — Inspected `runhidden.vbs`**
+The hidden launcher used at logon.
 
-6. **Inspected `config.json`** — XMRig configuration with mining pool and wallet.
+![runhidden.vbs source code](images/02-runhidden-vbs-launcher.png)
+> **Behaviour:** Launches `svchost32.exe` with window style `0` (hidden) using `WScript.Shell.Run`.  
+> **Use case:** Explains how the miner runs with no visible window or console.
 
-   ![config.json showing pool and wallet settings](images/03-config-json-mining-pool.png)
-   *Behaviour: pool URL `pool.supportxmr.com:3333`, attacker wallet, `tls:false`, `nicehash:false`.*
-   *Use case: extracts the mining pool, wallet address, and protocol IOCs.*
+**Step 6 — Inspected `config.json`**
+XMRig configuration with mining pool and wallet.
 
-7. **Inspected `SHA256SUMS`** — Confirms the binary origin.
+![config.json showing pool and wallet settings](images/03-config-json-mining-pool.png)
+> **Behaviour:** Pool URL `pool.supportxmr.com:3333`, attacker wallet, `tls:false`, `nicehash:false`.  
+> **Use case:** Extracts the mining pool, wallet address, and protocol IOCs.
 
-   ![SHA256SUMS file listing original XMRig hashes](images/05-sha256sums-xmrig-origin.png)
-   *Behaviour: lists hashes for `xmrig.exe`, `WinRing0x64.sys`, `config.json`, and helper scripts.*
-   *Use case: proves the dropped binary is an official XMRig 6.24.0 build, only renamed.*
+**Step 7 — Inspected `SHA256SUMS`**
+Confirms the binary origin.
 
-8. **Process Monitor** — Built a filter for `svchost32.exe` / `xmrig.exe` to capture mining activity.
+![SHA256SUMS file listing original XMRig hashes](images/05-sha256sums-xmrig-origin.png)
+> **Behaviour:** Lists hashes for `xmrig.exe`, `WinRing0x64.sys`, `config.json`, and helper scripts.  
+> **Use case:** Proves the dropped binary is an official XMRig 6.24.0 build, only renamed.
 
-   ![Process Monitor filter dialog](images/07-procmon-filter-svchost32.png)
-   *Behaviour: includes `svchost32.exe` and `xmrig.exe`; excludes `windowshost`, `Procmon`, `Procexp`, `Autoruns`.*
-   *Use case: documents the exact investigation methodology used to isolate miner events.*
+**Step 8 — Process Monitor**
+Built a filter for `svchost32.exe` / `xmrig.exe` to capture mining activity.
 
-9. **Captured Stratum traffic** — Live TCP send/receive events to the pool.
+![Process Monitor filter dialog](images/07-procmon-filter-svchost32.png)
+> **Behaviour:** Includes `svchost32.exe` and `xmrig.exe`; excludes `windowshost`, `Procmon`, `Procexp`, `Autoruns`.  
+> **Use case:** Documents the exact investigation methodology used to isolate miner events.
 
-   ![Process Monitor showing TCP traffic to mining pool](images/06-procmon-stratum-traffic.png)
-   *Behaviour: continuous TCP Send/Receive frames between `svchost32.exe` and `ns31430818.ip-141-94-96.eu:3333`.*
-   *Use case: live evidence of active Stratum mining communication.*
+**Step 9 — Captured Stratum Traffic**
+Live TCP send/receive events to the pool.
 
-10. **TCPView** — Confirmed the established outbound connection.
+![Process Monitor showing TCP traffic to mining pool](images/06-procmon-stratum-traffic.png)
+> **Behaviour:** Continuous TCP Send/Receive frames between `svchost32.exe` and `ns31430818.ip-141-94-96.eu:3333`.  
+> **Use case:** Live evidence of active Stratum mining communication.
 
-    ![TCPView showing svchost32.exe connection](images/11-tcpview-mining-pool-connection.png)
-    *Behaviour: `svchost32.exe` PID 35592 — `192.168.1.64:52338 → 141.94.96.144:3333`, state ESTABLISHED.*
-    *Use case: pins down the live remote IP, port, and source PID for IOC and firewall blocking.*
+**Step 10 — TCPView**
+Confirmed the established outbound connection.
 
-11. **RamMap** — Confirmed memory consumption.
+![TCPView showing svchost32.exe connection](images/11-tcpview-mining-pool-connection.png)
+> **Behaviour:** `svchost32.exe` PID 35592 — `192.168.1.64:52338 → 141.94.96.144:3333`, state `ESTABLISHED`.  
+> **Use case:** Pins down the live remote IP, port, and source PID for IOC and firewall blocking.
 
-    ![RamMap process view of svchost32.exe](images/10-rammap-svchost32-memory.png)
-    *Behaviour: `svchost32.exe` shows a multi-MB total / working set among normal services.*
-    *Use case: corroborates the memory impact reported by Process Explorer.*
+**Step 11 — RamMap**
+Confirmed memory consumption.
 
-12. **Autoruns** — Discovered the persistence entry.
+![RamMap process view of svchost32.exe](images/10-rammap-svchost32-memory.png)
+> **Behaviour:** `svchost32.exe` shows a multi-MB total/working set among normal services.  
+> **Use case:** Corroborates the memory impact reported by Process Explorer.
 
-    ![Autoruns showing WindowsHostService scheduled task](images/08-autoruns-windowshostservice.png)
-    *Behaviour: search for "windowshost" reveals a scheduled task named `WindowsHostService`.*
-    *Use case: identifies the autostart mechanism keeping the miner alive across reboots.*
+**Step 12 — Autoruns**
+Discovered the persistence entry.
 
-13. **Task Scheduler** — Verified the persistence trigger and command.
+![Autoruns showing WindowsHostService scheduled task](images/08-autoruns-windowshostservice.png)
+> **Behaviour:** Search for "windowshost" reveals a scheduled task named `WindowsHostService`.  
+> **Use case:** Identifies the autostart mechanism keeping the miner alive across reboots.
 
-    ![Task Scheduler showing WindowsHostService action](images/09-task-scheduler-persistence.png)
-    *Behaviour: task `WindowsHostService` runs `wscript.exe "C:\Users\niraj\AppData\Roaming\windowshost\runhidden.vbs"` at logon.*
-    *Use case: confirms exactly how, when, and with what command the miner is auto-launched.*
+**Step 13 — Task Scheduler**
+Verified the persistence trigger and command.
+
+![Task Scheduler showing WindowsHostService action](images/09-task-scheduler-persistence.png)
+> **Behaviour:** Task `WindowsHostService` runs `wscript.exe "C:\Users\niraj\AppData\Roaming\windowshost\runhidden.vbs"` at logon.  
+> **Use case:** Confirms exactly how, when, and with what command the miner is auto-launched.
 
 ---
 
-## Threat Summary
+## 🧩 Threat Summary
 
 This is a **trojanized XMRig cryptocurrency miner** disguised as a legitimate Windows system process. The attacker renamed the XMRig mining executable to `svchost32.exe` to mimic the legitimate Windows service host process (`svchost.exe`). The malware completely evaded the host antivirus and was only found through manual forensic investigation.
 
-The sample has been independently confirmed as a Monero miner on **VirusTotal**: most major engines flag it as `XMRig`, `CoinMiner`, or `BitMiner` (categories: miner / trojan / pua).
+The sample has been independently confirmed as a Monero miner on **VirusTotal** — most major engines flag it as `XMRig`, `CoinMiner`, or `BitMiner` (categories: miner / trojan / pua).
 
-> Reference: <https://www.virustotal.com/gui/file/5379df3d28d83164b24cfa02833233514958652eca489b968ff6e36b1bc49bc3>
+> 🔗 Reference: [VirusTotal Report — 5379df3d...](https://www.virustotal.com/gui/file/5379df3d28d83164b24cfa02833233514958652eca489b968ff6e36b1bc49bc3)
 
 ---
 
-## File-by-File Analysis
+## 🗂️ File-by-File Analysis
 
 ### 1. `svchost32.exe` — Main Malicious Executable
 
@@ -134,7 +185,7 @@ The sample has been independently confirmed as a Monero miner on **VirusTotal**:
 | **Disguised As** | Windows Service Host (`svchost.exe`) |
 | **Purpose** | Mines Monero cryptocurrency using victim's CPU |
 | **Original Hash (from SHA256SUMS)** | `f29d673b032f7ff763dec032aefd6c5759a1583b211625f7f770017bedf03689` |
-| **Host AV Detection** | NONE — undetected by installed antivirus |
+| **Host AV Detection** | `NONE` — undetected by installed antivirus |
 | **VirusTotal** | Flagged as XMRig / CoinMiner by majority of engines |
 
 **Why it evades the host antivirus:**
@@ -232,7 +283,7 @@ This file lists hashes for the original XMRig distribution, confirming the malwa
 
 ---
 
-## Indicators of Compromise (IOCs)
+## 🚨 Indicators of Compromise (IOCs)
 
 ### File System IOCs
 
@@ -241,7 +292,7 @@ This file lists hashes for the original XMRig distribution, confirming the malwa
 | Directory | `C:\Users\niraj\AppData\Roaming\windowshost\` |
 | Executable | `svchost32.exe` (SHA256: `f29d673b032f7ff763dec032aefd6c5759a1583b211625f7f770017bedf03689`) |
 | VBS Launcher | `runhidden.vbs` |
-| Lock File | `running.lock` (contains "running") |
+| Lock File | `running.lock` (contains `running`) |
 | Config | `config.json` (XMRig format with pool/wallet) |
 | Certificate | `cert.pem` (self-signed, CN=localhost) |
 | Private Key | `cert_key.pem` (RSA 2048-bit) |
@@ -255,7 +306,7 @@ This file lists hashes for the original XMRig distribution, confirming the malwa
 | Port | `3333` (Stratum protocol) |
 | Protocol | TCP/Stratum (unencrypted) |
 | Source Port (observed) | `52338` |
-| Connection Type | Persistent outbound, ESTABLISHED |
+| Connection Type | Persistent outbound, `ESTABLISHED` |
 
 ### Attacker's Monero Wallet Address
 
@@ -274,23 +325,23 @@ This file lists hashes for the original XMRig distribution, confirming the malwa
 
 ---
 
-## MITRE ATT&CK Framework Mapping
+## 🗺️ MITRE ATT&CK Framework Mapping
 
 | Technique ID | Tactic | Name | Usage in This Attack |
-|--------------|--------|------|----------------------|
-| T1496 | Impact | Resource Hijacking | CPU used for Monero mining |
-| T1036.005 | Defense Evasion | Masquerading: Match Legitimate Name | `svchost32.exe` mimics `svchost.exe` |
-| T1059.005 | Execution | Command and Scripting Interpreter: Visual Basic | `runhidden.vbs` launches the miner |
-| T1564.003 | Defense Evasion | Hide Artifacts: Hidden Window | Window style `0` hides process |
-| T1053.005 | Persistence | Scheduled Task/Job: Scheduled Task | `WindowsHostService` task at logon |
-| T1547.001 | Persistence | Boot or Logon Autostart Execution: Registry Run Keys | (alternate persistence vector to check) |
-| T1071 | Command and Control | Application Layer Protocol | Stratum mining protocol over TCP |
-| T1027 | Defense Evasion | Obfuscated Files or Information | Renamed binary, indirect execution |
-| T1074.001 | Collection | Data Staged: Local Data Staging | All components staged in `AppData\Roaming` |
+|:------------:|--------|------|----------------------|
+| [T1496](https://attack.mitre.org/techniques/T1496/) | Impact | Resource Hijacking | CPU used for Monero mining |
+| [T1036.005](https://attack.mitre.org/techniques/T1036/005/) | Defense Evasion | Masquerading: Match Legitimate Name | `svchost32.exe` mimics `svchost.exe` |
+| [T1059.005](https://attack.mitre.org/techniques/T1059/005/) | Execution | Command and Scripting Interpreter: Visual Basic | `runhidden.vbs` launches the miner |
+| [T1564.003](https://attack.mitre.org/techniques/T1564/003/) | Defense Evasion | Hide Artifacts: Hidden Window | Window style `0` hides process |
+| [T1053.005](https://attack.mitre.org/techniques/T1053/005/) | Persistence | Scheduled Task/Job: Scheduled Task | `WindowsHostService` task at logon |
+| [T1547.001](https://attack.mitre.org/techniques/T1547/001/) | Persistence | Boot or Logon Autostart Execution: Registry Run Keys | (alternate persistence vector to check) |
+| [T1071](https://attack.mitre.org/techniques/T1071/) | Command and Control | Application Layer Protocol | Stratum mining protocol over TCP |
+| [T1027](https://attack.mitre.org/techniques/T1027/) | Defense Evasion | Obfuscated Files or Information | Renamed binary, indirect execution |
+| [T1074.001](https://attack.mitre.org/techniques/T1074/001/) | Collection | Data Staged: Local Data Staging | All components staged in `AppData\Roaming` |
 
 ---
 
-## Why the Host Antivirus Failed to Detect This
+## 🛡️ Why the Host Antivirus Failed to Detect This
 
 | Evasion Technique | Explanation |
 |-------------------|-------------|
@@ -301,34 +352,34 @@ This file lists hashes for the original XMRig distribution, confirming the malwa
 | **No Exploit Code** | The malware contains no shellcode, exploits, or traditionally "malicious" code patterns. |
 | **Indirect Execution** | VBS → EXE chain adds indirection that breaks simple behavioral detection. |
 
-> Note: While the **host AV missed it**, VirusTotal cross-checks ([sample report](https://www.virustotal.com/gui/file/5379df3d28d83164b24cfa02833233514958652eca489b968ff6e36b1bc49bc3)) show that the majority of engines do recognize this binary as XMRig / CoinMiner — the failure was specific to the host's installed product.
+> **Note:** While the **host AV missed it**, VirusTotal cross-checks ([sample report](https://www.virustotal.com/gui/file/5379df3d28d83164b24cfa02833233514958652eca489b968ff6e36b1bc49bc3)) show that the majority of engines do recognize this binary as XMRig / CoinMiner — the failure was specific to the host's installed product.
 
 ---
 
-## Impact Assessment
+## 📊 Impact Assessment
 
 | Impact Area | Severity | Description |
-|-------------|----------|-------------|
-| **CPU Usage** | CRITICAL | All 16 CPU threads consumed at 100% capacity |
-| **System Performance** | HIGH | System extremely slow, 80% resources consumed at boot |
-| **Battery Life** | HIGH | Laptop battery drains rapidly due to constant full CPU load |
-| **Electricity Cost** | MEDIUM | Increased power consumption at victim's expense |
-| **Hardware Lifespan** | MEDIUM | Prolonged 100% CPU usage causes thermal stress |
-| **Network** | LOW | Constant outbound connection to mining pool |
-| **Data Theft** | NONE OBSERVED | No data exfiltration capability detected in this configuration |
-| **Privacy** | LOW | Wallet address and pool connection expose attacker's identity |
+|-------------|:--------:|-------------|
+| **CPU Usage** | 🔴 CRITICAL | All 16 CPU threads consumed at 100% capacity |
+| **System Performance** | 🔴 HIGH | System extremely slow, 80% resources consumed at boot |
+| **Battery Life** | 🔴 HIGH | Laptop battery drains rapidly due to constant full CPU load |
+| **Electricity Cost** | 🟡 MEDIUM | Increased power consumption at victim's expense |
+| **Hardware Lifespan** | 🟡 MEDIUM | Prolonged 100% CPU usage causes thermal stress |
+| **Network** | 🟢 LOW | Constant outbound connection to mining pool |
+| **Data Theft** | ✅ NONE OBSERVED | No data exfiltration capability detected in this configuration |
+| **Privacy** | 🟢 LOW | Wallet address and pool connection expose attacker's identity |
 
 ---
 
-## Remediation Steps
+## 🔧 Remediation Steps
 
-### Phase 1: Immediate Containment
+### Phase 1 — Immediate Containment
 
 1. **Kill the process** — Open Task Manager → find `svchost32.exe` → End Task.
 2. **Disconnect from network** — Prevent further communication with the mining pool.
 3. **Verify process is dead** — Use Process Explorer to confirm no child processes remain.
 
-### Phase 2: Remove Persistence
+### Phase 2 — Remove Persistence
 
 4. **Open Task Scheduler** (`taskschd.msc`) → delete the `WindowsHostService` task.
 5. **Open Autoruns** (run as Administrator) → remove any entry referencing `runhidden.vbs`, `svchost32.exe`, or `windowshost`.
@@ -340,10 +391,10 @@ This file lists hashes for the original XMRig distribution, confirming the malwa
    ```
 7. **Check Startup folders:** `shell:startup` and `shell:common startup`.
 
-### Phase 3: Remove Malware Files
+### Phase 3 — Remove Malware Files
 
 8. **Delete the entire malware directory:**
-   ```
+   ```cmd
    rmdir /s /q "C:\Users\niraj\AppData\Roaming\windowshost"
    ```
 9. **Search for related files** — Check for copies in:
@@ -351,17 +402,17 @@ This file lists hashes for the original XMRig distribution, confirming the malwa
    - `C:\ProgramData\`
    - Other user profiles
 
-### Phase 4: Block & Verify
+### Phase 4 — Block & Verify
 
 10. **Block the mining pool / observed IP** at the firewall:
-    ```
+    ```cmd
     netsh advfirewall firewall add rule name="Block Mining Pool" dir=out action=block remoteip=141.94.96.144
     netsh advfirewall firewall add rule name="Block SupportXMR" dir=out action=block remoteip=pool.supportxmr.com
     ```
 11. **Monitor CPU usage** for 48 hours to confirm mining has stopped.
 12. **Run full antivirus scan** with updated definitions (consider Malwarebytes or HitmanPro as a secondary scanner).
 
-### Phase 5: Post-Incident
+### Phase 5 — Post-Incident
 
 13. **Change all passwords** — Assume credentials may be compromised.
 14. **Investigate infection vector** — phishing, cracked software, drive-by download, or USB?
@@ -370,13 +421,13 @@ This file lists hashes for the original XMRig distribution, confirming the malwa
 
 ---
 
-## Sample Preservation — `windowshost.zip`
+## 🗜️ Sample Preservation — `windowshost.zip`
 
 The complete malware folder has been compressed into **`windowshost.zip`** and kept alongside this report for educational and incident-response purposes.
 
 > ⚠️ **WARNING:** `windowshost.zip` contains a **live, working XMRig miner**. Do **not** unzip or execute it on any production or personal system.
 
-### Safe analysis environments
+### Safe Analysis Environments
 
 | Environment | Notes |
 |-------------|-------|
@@ -385,7 +436,7 @@ The complete malware folder has been compressed into **`windowshost.zip`** and k
 | **Windows Sandbox** | Lightweight isolated container shipped with Windows 10/11 Pro+. Files inside the sandbox are discarded on close, which is ideal for one-shot inspection. |
 | **REMnux + FLARE VM** | Recommended dual-VM setup for static + dynamic analysis with full network capture (Wireshark, INetSim). |
 
-### Recommended workflow inside the VM
+### Recommended Workflow Inside the VM
 
 1. Disable internet access (or route through INetSim/FakeNet) before unzipping.
 2. Calculate hashes of every file and compare with the `SHA256SUMS` shipped in the archive.
@@ -394,7 +445,7 @@ The complete malware folder has been compressed into **`windowshost.zip`** and k
 5. Only execute under controlled conditions (Process Monitor + Wireshark running) if dynamic behavior is needed.
 6. Revert the snapshot when done.
 
-### Recommended tools
+### Recommended Analysis Tools
 
 | Tool | Purpose |
 |------|---------|
@@ -407,7 +458,7 @@ The complete malware folder has been compressed into **`windowshost.zip`** and k
 
 ---
 
-## Key Learning Points
+## 📚 Key Learning Points
 
 1. **Antivirus alone is not enough** — the host AV missed this entirely while VirusTotal engines did not.
 2. **Behavioral analysis matters** — the 80% CPU usage was the only visible symptom.
@@ -416,7 +467,7 @@ The complete malware folder has been compressed into **`windowshost.zip`** and k
 5. **Check process paths** — the real `svchost.exe` only runs from `C:\Windows\System32\`, never from `AppData`.
 6. **Living-off-the-land techniques are common** — attackers chain trusted Windows tools (VBScript, wscript, scheduled tasks) to avoid detection.
 
-### Red flags checklist
+### Red Flags Checklist
 
 ```
 ├── High CPU at startup with no user applications open
@@ -429,7 +480,7 @@ The complete malware folder has been compressed into **`windowshost.zip`** and k
 
 ---
 
-## Conclusion
+## ✅ Conclusion
 
 This is a confirmed **XMRig cryptocurrency miner** operating covertly on the system. The attacker deployed a well-crafted evasion strategy that bypassed the host antivirus by:
 
@@ -439,12 +490,20 @@ This is a confirmed **XMRig cryptocurrency miner** operating covertly on the sys
 4. Staging files in a legitimate-looking `AppData\Roaming` directory.
 5. Leveraging the fact that XMRig is technically "legitimate" software.
 
-The malware was only discovered through **manual forensic investigation** using Sysinternals tools after the analyst noticed abnormal 80% CPU usage at startup. The sample is independently confirmed as a Monero miner by the majority of engines on **VirusTotal**:
+The malware was only discovered through **manual forensic investigation** using Sysinternals tools after the analyst noticed abnormal 80% CPU usage at startup. The sample is independently confirmed as a Monero miner by the majority of engines on VirusTotal:
 
-> <https://www.virustotal.com/gui/file/5379df3d28d83164b24cfa02833233514958652eca489b968ff6e36b1bc49bc3>
+> 🔗 [https://www.virustotal.com/gui/file/5379df3d28d83164b24cfa02833233514958652eca489b968ff6e36b1bc49bc3](https://www.virustotal.com/gui/file/5379df3d28d83164b24cfa02833233514958652eca489b968ff6e36b1bc49bc3)
 
 **This case demonstrates that antivirus alone is insufficient against well-disguised threats. Manual investigation skills and knowledge of system internals remain critical for identifying stealthy malware.**
 
 ---
 
+<div align="center">
+
 *Report generated for educational and incident response purposes.*
+
+---
+
+Made with ❤️ by [hackthacker](https://github.com/hackthacker)
+
+</div>
